@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CineFlux | Premium Ticketing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .seat { width: 40px; height: 40px; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold;}
+        .seat.available { background: #334155; }
+        .seat.available:hover { background: #3b82f6; transform: scale(1.1); }
+        .seat.selected { background: #3b82f6; box-shadow: 0 0 10px #3b82f6; }
+        .seat.booked { background: #ef4444; cursor: not-allowed; opacity: 0.5; }
+        .seat.locked { background: #eab308; cursor: not-allowed; opacity: 0.7; }
+        .hidden { display: none !important; }
+        .loader { border: 4px solid #334155; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: auto;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="glass sticky top-0 z-50 p-4">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-blue-500 cursor-pointer" onclick="showView('movies-view')">🎬 CineFlux</h1>
+            <div id="nav-auth" class="space-x-4">
+                <button onclick="showView('auth-view')" class="text-gray-300 hover:text-white transition">Login / Register</button>
+            </div>
+            <div id="nav-user" class="hidden space-x-4 flex items-center">
+                <span id="user-greeting" class="text-gray-300 font-medium"></span>
+                <button onclick="loadDashboard()" class="text-blue-400 hover:text-blue-300 transition">Dashboard</button>
+                <button onclick="logout()" class="text-red-400 hover:text-red-300 transition">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-6xl mx-auto w-full p-6 relative">
+        <div id="global-loader" class="hidden absolute inset-0 flex items-center justify-center bg-[#0f172a] bg-opacity-80 z-40">
+            <div class="loader"></div>
+        </div>
+
+        <!-- Notification Banner -->
+        <div id="notification" class="hidden mb-4 p-4 rounded-lg text-center font-bold transition-all duration-300"></div>
+
+        <!-- 1. Movies View -->
+        <section id="movies-view" class="view-section">
+            <h2 class="text-3xl font-bold mb-6 text-white">Now Showing</h2>
+            <div id="showtimes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- 2. Auth View -->
+        <section id="auth-view" class="view-section hidden flex justify-center items-center h-[70vh]">
+            <div class="glass p-8 rounded-2xl w-full max-w-md">
+                <div class="flex mb-6 border-b border-gray-700">
+                    <button id="tab-login" class="flex-1 pb-2 border-b-2 border-blue-500 font-bold" onclick="toggleAuthTab('login')">Login</button>
+                    <button id="tab-register" class="flex-1 pb-2 text-gray-500 hover:text-gray-300" onclick="toggleAuthTab('register')">Register</button>
+                </div>
+                
+                <form id="auth-form" onsubmit="handleAuth(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Username</label>
+                            <input type="text" id="auth-username" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 text-white">
+                        </div>
+                        <div id="email-field" class="hidden">
+                            <label class="block text-sm text-gray-400 mb-1">Email</label>
+                            <input type="email" id="auth-email" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Password</label>
+                            <input type="password" id="auth-password" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 text-white">
+                        </div>
+                        <button type="submit" id="auth-submit-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition mt-4">Login</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- 3. Booking View -->
+        <section id="booking-view" class="view-section hidden">
+            <button onclick="showView('movies-view')" class="text-blue-400 hover:underline mb-4">← Back to Movies</button>
+            <div class="glass p-8 rounded-2xl">
+                <div class="flex justify-between items-end mb-8">
+                    <div>
+                        <h2 id="booking-movie-title" class="text-3xl font-bold text-white mb-2"></h2>
+                        <p id="booking-cinema-info" class="text-gray-400"></p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm text-gray-400">Total Selection</p>
+                        <p id="booking-total" class="text-2xl font-bold text-blue-400">0 Seats</p>
+                    </div>
+                </div>
+
+                <!-- Screen -->
+                <div class="w-full h-8 bg-gradient-to-b from-blue-500/20 to-transparent rounded-t-full mb-12 flex items-center justify-center text-blue-300 text-sm tracking-widest uppercase">Screen</div>
+
+                <div id="seats-container" class="flex flex-wrap justify-center gap-3 mb-8 max-w-3xl mx-auto">
+                    <!-- Seats injected via JS -->
+                </div>
+
+                <div class="flex justify-center gap-6 mb-8 text-sm text-gray-400">
+                    <div class="flex items-center gap-2"><div class="seat available w-6 h-6"></div> Available</div>
+                    <div class="flex items-center gap-2"><div class="seat selected w-6 h-6"></div> Selected</div>
+                    <div class="flex items-center gap-2"><div class="seat booked w-6 h-6"></div> Booked</div>
+                </div>
+
+                <button onclick="confirmBooking()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg transition text-lg">Confirm Booking</button>
+            </div>
+        </section>
+
+        <!-- 4. Dashboard View -->
+        <section id="dashboard-view" class="view-section hidden">
+            <h2 class="text-3xl font-bold mb-6 text-white">My Dashboard</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Profile Card -->
+                <div class="glass p-6 rounded-2xl md:col-span-1 h-fit">
+                    <div class="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center text-3xl font-bold mb-4 mx-auto" id="profile-avatar">U</div>
+                    <h3 class="text-xl font-bold text-center mb-1" id="profile-name">Loading...</h3>
+                    <p class="text-gray-400 text-center text-sm mb-6" id="profile-email"></p>
+                    <div class="border-t border-gray-700 pt-4">
+                        <p class="text-sm text-gray-400 flex justify-between">Total Bookings <span id="profile-total-bookings" class="font-bold text-white">0</span></p>
+                    </div>
+                </div>
+
+                <!-- Bookings List -->
+                <div class="md:col-span-2 space-y-4" id="dashboard-bookings">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const API_BASE = '/api';
+        let state = {
+            token: localStorage.getItem('access_token'),
+            user: null,
+            currentShowtime: null,
+            selectedSeats: new Set()
+        };
+
+        // UI Helpers
+        const showView = (viewId) => {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(viewId).classList.remove('hidden');
+            if (viewId === 'movies-view') loadShowtimes();
+            updateNav();
+        };
+
+        const showLoader = (show) => document.getElementById('global-loader').classList.toggle('hidden', !show);
+
+        const showNotification = (msg, isError = false) => {
+            const el = document.getElementById('notification');
+            el.textContent = msg;
+            el.className = `mb-4 p-4 rounded-lg text-center font-bold transition-all duration-300 ${isError ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-green-500/20 text-green-400 border border-green-500/50'}`;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 4000);
+        };
+
+        const updateNav = () => {
+            if (state.token) {
+                document.getElementById('nav-auth').classList.add('hidden');
+                document.getElementById('nav-user').classList.remove('hidden');
+                if (state.user) document.getElementById('user-greeting').textContent = `Hi, ${state.user.username}`;
+            } else {
+                document.getElementById('nav-auth').classList.remove('hidden');
+                document.getElementById('nav-user').classList.add('hidden');
+            }
+        };
+
+        // API Requests
+        const apiFetch = async (endpoint, options = {}) => {
+            showLoader(true);
+            const headers = { 'Content-Type': 'application/json' };
+            if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+            
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+                
+                if (response.status === 401 && state.token) {
+                    logout();
+                    throw new Error("Session expired. Please login again.");
+                }
+                
+                const data = await response.json().catch(() => null);
+                if (!response.ok) throw new Error(data?.detail || data?.error || data?.username?.[0] || 'An error occurred');
+                return data;
+            } finally {
+                showLoader(false);
+            }
+        };
+
+        // Authentication
+        let authMode = 'login';
+        const toggleAuthTab = (mode) => {
+            authMode = mode;
+            document.getElementById('email-field').classList.toggle('hidden', mode === 'login');
+            document.getElementById('auth-submit-btn').textContent = mode === 'login' ? 'Login' : 'Register';
+            
+            const btnLogin = document.getElementById('tab-login');
+            const btnReg = document.getElementById('tab-register');
+            
+            if (mode === 'login') {
+                btnLogin.className = "flex-1 pb-2 border-b-2 border-blue-500 font-bold";
+                btnReg.className = "flex-1 pb-2 text-gray-500 hover:text-gray-300";
+            } else {
+                btnReg.className = "flex-1 pb-2 border-b-2 border-blue-500 font-bold";
+                btnLogin.className = "flex-1 pb-2 text-gray-500 hover:text-gray-300";
+            }
+        };
+
+        const handleAuth = async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('auth-username').value;
+            const password = document.getElementById('auth-password').value;
+            const email = document.getElementById('auth-email').value;
+
+            try {
+                if (authMode === 'register') {
+                    await apiFetch('/auth/register/', { method: 'POST', body: JSON.stringify({ username, email, password }) });
+                    showNotification('Registration successful! Logging in...');
+                }
+
+                const data = await apiFetch('/auth/login/', { method: 'POST', body: JSON.stringify({ username, password }) });
+                state.token = data.access;
+                localStorage.setItem('access_token', data.access);
+                await loadUserProfile();
+                showView('movies-view');
+                showNotification('Welcome back!');
+            } catch (err) {
+                showNotification(err.message, true);
+            }
+        };
+
+        const loadUserProfile = async () => {
+            if (!state.token) return;
+            try {
+                state.user = await apiFetch('/auth/profile/');
+                updateNav();
+            } catch (err) {
+                console.error(err);
+            }
+        };
+
+        const logout = () => {
+            state.token = null;
+            state.user = null;
+            localStorage.removeItem('access_token');
+            updateNav();
+            showView('movies-view');
+            showNotification('Logged out successfully');
+        };
+
+        // Movies & Showtimes
+        const loadShowtimes = async () => {
+            try {
+                const showtimes = await apiFetch('/showtimes/');
+                const container = document.getElementById('showtimes-container');
+                container.innerHTML = '';
+                
+                if (!showtimes.length) {
+                    container.innerHTML = '<p class="text-gray-400 col-span-full text-center py-10">No showtimes available right now.</p>';
+                    return;
+                }
+
+                showtimes.forEach(st => {
+                    const date = new Date(st.start_time).toLocaleString();
+                    container.innerHTML += `
+                        <div class="glass p-6 rounded-xl hover:transform hover:-translate-y-1 transition duration-300">
+                            <div class="bg-blue-500 text-xs font-bold px-2 py-1 rounded inline-block mb-3">IMAX</div>
+                            <h3 class="text-xl font-bold text-white mb-1">${st.movie_title}</h3>
+                            <p class="text-sm text-gray-400 mb-4">${st.cinema_name} - ${st.hall_name}</p>
+                            <p class="text-blue-300 font-mono text-sm mb-6">🕒 ${date}</p>
+                            <button onclick="openBooking(${st.id}, '${st.movie_title}', '${st.cinema_name} - ${st.hall_name} | ${date}')" class="w-full bg-gray-800 hover:bg-blue-600 text-white font-medium py-2 rounded-lg transition border border-gray-700 hover:border-blue-500">Book Tickets</button>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                showNotification('Failed to load showtimes', true);
+            }
+        };
+
+        // Booking
+        const openBooking = async (id, title, info) => {
+            if (!state.token) {
+                showNotification('Please login to book tickets', true);
+                showView('auth-view');
+                return;
+            }
+
+            state.currentShowtime = id;
+            state.selectedSeats.clear();
+            document.getElementById('booking-movie-title').textContent = title;
+            document.getElementById('booking-cinema-info').textContent = info;
+            document.getElementById('booking-total').textContent = '0 Seats';
+            
+            try {
+                const seats = await apiFetch(`/showtimes/${id}/seats/`);
+                const container = document.getElementById('seats-container');
+                container.innerHTML = '';
+                
+                seats.forEach(s => {
+                    const el = document.createElement('div');
+                    el.className = `seat ${s.status.toLowerCase()}`;
+                    el.textContent = s.seat_number;
+                    if (s.status === 'AVAILABLE') {
+                        el.onclick = () => toggleSeat(el, s.id);
+                    }
+                    container.appendChild(el);
+                });
+                showView('booking-view');
+            } catch (err) {
+                showNotification('Failed to load seating chart', true);
+            }
+        };
+
+        const toggleSeat = (el, id) => {
+            if (state.selectedSeats.has(id)) {
+                state.selectedSeats.delete(id);
+                el.classList.remove('selected');
+                el.classList.add('available');
+            } else {
+                state.selectedSeats.add(id);
+                el.classList.add('selected');
+                el.classList.remove('available');
+            }
+            document.getElementById('booking-total').textContent = `${state.selectedSeats.size} Seats`;
+        };
+
+        const confirmBooking = async () => {
+            if (state.selectedSeats.size === 0) return showNotification('Please select at least one seat', true);
+            
+            try {
+                await apiFetch('/bookings/book_seats/', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        showtime_id: state.currentShowtime,
+                        seat_ids: Array.from(state.selectedSeats)
+                    })
+                });
+                showNotification('Booking confirmed successfully!');
+                loadDashboard();
+            } catch (err) {
+                showNotification(err.message, true);
+                // Refresh seats
+                openBooking(state.currentShowtime, document.getElementById('booking-movie-title').textContent, document.getElementById('booking-cinema-info').textContent);
+            }
+        };
+
+        // Dashboard
+        const loadDashboard = async () => {
+            if (!state.token) return;
+            try {
+                await loadUserProfile();
+                document.getElementById('profile-avatar').textContent = state.user.username.charAt(0).toUpperCase();
+                document.getElementById('profile-name').textContent = state.user.username;
+                document.getElementById('profile-email').textContent = state.user.email;
+
+                const bookings = await apiFetch('/bookings/my_dashboard/');
+                document.getElementById('profile-total-bookings').textContent = bookings.length;
+                
+                const container = document.getElementById('dashboard-bookings');
+                container.innerHTML = '';
+                
+                if (!bookings.length) {
+                    container.innerHTML = '<div class="glass p-8 rounded-2xl text-center text-gray-400">You have no past bookings.</div>';
+                } else {
+                    bookings.forEach(b => {
+                        const date = new Date(b.start_time).toLocaleString();
+                        const seatNumbers = b.seats.map(s => s.seat_number).join(', ');
+                        const statusColor = b.status === 'CONFIRMED' ? 'text-green-400' : 'text-red-400';
+                        
+                        container.innerHTML += `
+                            <div class="glass p-6 rounded-2xl flex justify-between items-center">
+                                <div>
+                                    <h4 class="text-lg font-bold text-white mb-1">${b.movie_title}</h4>
+                                    <p class="text-sm text-gray-400">${b.cinema_name}</p>
+                                    <p class="text-xs text-gray-500 mt-2">Booked on ${new Date(b.created_at).toLocaleDateString()}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-blue-300 font-mono mb-1">${date}</p>
+                                    <p class="text-sm text-white">Seats: <span class="font-bold">${seatNumbers}</span></p>
+                                    <p class="text-xs font-bold mt-2 ${statusColor}">${b.status}</p>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                showView('dashboard-view');
+            } catch (err) {
+                showNotification('Failed to load dashboard', true);
+            }
+        };
+
+        // Init
+        if (state.token) loadUserProfile();
+        showView('movies-view');
+    </script>
+</body>
+</html>
