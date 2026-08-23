@@ -1,4 +1,4 @@
-import os
+﻿import os
 import django
 from datetime import timedelta
 from django.utils import timezone
@@ -46,7 +46,8 @@ def seed_db():
         movie=movie,
         cinema_hall=hall1,
         start_time=now + timedelta(days=1, hours=19), # Tomorrow 7 PM
-        end_time=now + timedelta(days=1, hours=21, minutes=28)
+        end_time=now + timedelta(days=1, hours=21, minutes=28),
+        price_per_seat=350.00  # <--- Added Price Here (Premium IMAX price)
     )
     show_seats = [ShowSeat(showtime=st1, seat=s) for s in Seat.objects.filter(cinema_hall=hall1)]
     ShowSeat.objects.bulk_create(show_seats)
@@ -56,7 +57,8 @@ def seed_db():
         movie=movie2,
         cinema_hall=hall2,
         start_time=now + timedelta(days=2, hours=20),
-        end_time=now + timedelta(days=2, hours=23)
+        end_time=now + timedelta(days=2, hours=23),
+        price_per_seat=200.00  # <--- Added Price Here (Regular price)
     )
     show_seats2 = [ShowSeat(showtime=st2, seat=s) for s in Seat.objects.filter(cinema_hall=hall2)]
     ShowSeat.objects.bulk_create(show_seats2)
